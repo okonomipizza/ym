@@ -6,7 +6,9 @@ pub fn main() !void {
     var terminal = try Terminal.init();
     while (true) {
         try terminal.draw();
-        std.time.sleep(50000);
+        try terminal.drawTextBox("Hello world!");
+        try terminal.flush();
+        std.time.sleep(50000000000);
     }
     try terminal.deinit();
 }

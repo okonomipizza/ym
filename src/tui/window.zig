@@ -42,6 +42,10 @@ pub const Terminal = struct {
         try self.flush();
     }
 
+    pub fn drawTextBox(self: *Self, text: []const u8) !void {
+        try self.panel.drawRectangle(self.writer.writer(), &self.ansi, text, Position{ .row = 3, .col = 5 }, Position{ .row = 30, .col = 50 });
+    }
+
     pub fn flush(self: *Self) !void {
         try self.writer.flush();
     }
@@ -71,15 +75,11 @@ pub const Terminal = struct {
 };
 
 /// Position at terminal
-    const Position = struct {
-        row: u16,
-        col: u16
-    };
+const Position = struct { row: u16, col: u16 };
 
 pub const Panel = struct {
     width: u16,
     height: u16,
-    // text: std.ArrayList([]const u8),
 
     const Self = @This();
 
@@ -102,19 +102,23 @@ pub const Panel = struct {
     fn drawOutline(self: Self, writer: anytype) !void {
         const ansi = AnsiEscape{};
 
-        try self.drawRectangle(writer, &ansi, "Hello", Position{.row = 1, .col = 1}, Position{.row = self.height, .col = self.width});
+        try self.drawRectangle(writer, &ansi, null, Position{ .row = 1, .col = 1 }, Position{ .row = self.height, .col = self.width });
     }
 
-    fn drawRectangle(self: Self,writer: anytype, ansi: *const AnsiEscape, text: []const u8, left_top: Position, right_bottom: Position) !void {
+    pub fn drawRectangle(self: Self, writer: anytype, ansi: *const AnsiEscape, text: ?[]const u8, left_top: Position, right_bottom: Position) !void {
         const width = right_bottom.col - left_top.col + 1;
         const height = right_bottom.row - left_top.row + 1;
 
-        _ = text;
-
         try self.drawRecTopBorder(writer, ansi, width, left_top);
-        try self.drawRecSideBorder(writer, ansi, height, Position{.row = left_top.row, .col = left_top.col});
-        try self.drawRecSideBorder(writer, ansi, height, Position{.row = left_top.row, .col = right_bottom.col});
-        try self.drawRecBottomBorder(writer, ansi, width, Position{.row = right_bottom.row, .col = left_top.col});
+        try self.drawRecSideBorder(writer, ansi, height, Position{ .row = left_top.row, .col = left_top.col });
+        try self.drawRecSideBorder(writer, ansi, height, Position{ .row = left_top.row, .col = right_bottom.col });
+        try self.drawRecBottomBorder(writer, ansi, width, Position{ .row = right_bottom.row, .col = left_top.col });
+
+        // Basically text starts at second row
+        if (text) |txt| {
+            try ansi.cursorTo(writer, Position{ .row = left_top.row + 4, .col = left_top.col + 4 });
+            try writer.writeAll(txt);
+        }
     }
 
     /// Draw top line to right direction from "start" position
@@ -162,11 +166,10 @@ pub const Panel = struct {
 
         var row = start.row + 1;
         while (row <= end_row) : (row += 1) {
-            try ansi.cursorTo(writer, Position{.row = row, .col = start.col});
+            try ansi.cursorTo(writer, Position{ .row = row, .col = start.col });
             try writer.writeAll(BoxChars.VERTICAL);
         }
     }
-
 };
 
 pub const ScreenSize = struct {
@@ -268,8 +271,6 @@ const BoxChars = struct {
     const T_LEFT = "┤"; // ┤
     const CROSS = "┼";
 };
-
-
 
 // try stdout.print("\x1b[1mMAIN TITLE\x1b[0m\n", .{});
 //     try stdout.print("═══════════\n", .{});
