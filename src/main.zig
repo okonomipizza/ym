@@ -1,12 +1,13 @@
 const std = @import("std");
 const lib = @import("ym_lib");
 const Terminal = lib.Terminal;
+const BoxSyleTypes = lib.BoxStyleType;
 
 pub fn main() !void {
     var terminal = try Terminal.init();
     while (true) {
         try terminal.draw();
-        try terminal.drawTextBox("Hello world!");
+        try terminal.drawTextBox("Hello world!", BoxSyleTypes.double);
         try terminal.flush();
         std.time.sleep(50000000000);
     }

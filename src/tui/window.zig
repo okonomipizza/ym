@@ -42,8 +42,8 @@ pub const Terminal = struct {
         try self.flush();
     }
 
-    pub fn drawTextBox(self: *Self, text: []const u8) !void {
-        try self.panel.drawRectangle(self.writer.writer(), &self.ansi, text, Position{ .row = 3, .col = 5 }, Position{ .row = 30, .col = 50 });
+    pub fn drawTextBox(self: *Self, text: []const u8, box_style_type: BoxStyleType) !void {
+        try self.panel.drawRectangle(self.writer.writer(), &self.ansi, text, Position{ .row = 3, .col = 5 }, Position{ .row = 30, .col = 50 }, box_style_type);
     }
 
     pub fn flush(self: *Self) !void {
@@ -102,17 +102,27 @@ pub const Panel = struct {
     fn drawOutline(self: Self, writer: anytype) !void {
         const ansi = AnsiEscape{};
 
-        try self.drawRectangle(writer, &ansi, null, Position{ .row = 1, .col = 1 }, Position{ .row = self.height, .col = self.width });
+        try self.drawRectangle(writer, &ansi, null, Position{ .row = 1, .col = 1 }, Position{ .row = self.height, .col = self.width }, BoxStyleType.light);
     }
 
-    pub fn drawRectangle(self: Self, writer: anytype, ansi: *const AnsiEscape, text: ?[]const u8, left_top: Position, right_bottom: Position) !void {
+    pub fn drawRectangle(
+        self: Self,
+        writer: anytype,
+        ansi: *const AnsiEscape,
+        text: ?[]const u8,
+        left_top: Position,
+        right_bottom: Position,
+        box_style: BoxStyleType, 
+) !void {
         const width = right_bottom.col - left_top.col + 1;
         const height = right_bottom.row - left_top.row + 1;
+        
+        const box_char = getBoxSyle(box_style);
 
-        try self.drawRecTopBorder(writer, ansi, width, left_top);
-        try self.drawRecSideBorder(writer, ansi, height, Position{ .row = left_top.row, .col = left_top.col });
-        try self.drawRecSideBorder(writer, ansi, height, Position{ .row = left_top.row, .col = right_bottom.col });
-        try self.drawRecBottomBorder(writer, ansi, width, Position{ .row = right_bottom.row, .col = left_top.col });
+        try self.drawRecTopBorder(writer, ansi, width, left_top, box_char);
+        try self.drawRecSideBorder(writer, ansi, height, Position{ .row = left_top.row, .col = left_top.col }, box_char);
+        try self.drawRecSideBorder(writer, ansi, height, Position{ .row = left_top.row, .col = right_bottom.col }, box_char);
+        try self.drawRecBottomBorder(writer, ansi, width, Position{ .row = right_bottom.row, .col = left_top.col }, box_char);
 
         // Basically text starts at second row
         if (text) |txt| {
@@ -122,7 +132,7 @@ pub const Panel = struct {
     }
 
     /// Draw top line to right direction from "start" position
-    fn drawRecTopBorder(self: Self, writer: anytype, ansi: *const AnsiEscape, width: u16, start: Position) !void {
+    fn drawRecTopBorder(self: Self, writer: anytype, ansi: *const AnsiEscape, width: u16, start: Position, box_chars: BoxCars) !void {
         _ = self;
 
         try ansi.cursorTo(writer, start);
@@ -131,17 +141,17 @@ pub const Panel = struct {
         var col: u16 = start.col;
         while (col <= end_col) : (col += 1) {
             if (col == start.col) {
-                try writer.writeAll(BoxChars.TOP_LEFT);
+                try writer.writeAll(box_chars.top_left);
             } else if (col == end_col) {
-                try writer.writeAll(BoxChars.TOP_RIGHT);
+                try writer.writeAll(box_chars.top_right);
             } else {
-                try writer.writeAll(BoxChars.HORIZONTAL);
+                try writer.writeAll(box_chars.horizontal);
             }
         }
     }
 
     /// Draw bottom line to right direction from "start" position
-    fn drawRecBottomBorder(self: Self, writer: anytype, ansi: *const AnsiEscape, width: u16, start: Position) !void {
+    fn drawRecBottomBorder(self: Self, writer: anytype, ansi: *const AnsiEscape, width: u16, start: Position, box_chars: BoxCars) !void {
         _ = self;
 
         try ansi.cursorTo(writer, start);
@@ -150,24 +160,24 @@ pub const Panel = struct {
         var col: u16 = start.col;
         while (col <= end_col) : (col += 1) {
             if (col == start.col) {
-                try writer.writeAll(BoxChars.BOTTOM_LEFT);
+                try writer.writeAll(box_chars.bottom_left);
             } else if (col == end_col) {
-                try writer.writeAll(BoxChars.BOTTOM_RIGHT);
+                try writer.writeAll(box_chars.bottom_right);
             } else {
-                try writer.writeAll(BoxChars.HORIZONTAL);
+                try writer.writeAll(box_chars.horizontal);
             }
         }
     }
 
     /// Draw side line
-    fn drawRecSideBorder(self: Self, writer: anytype, ansi: *const AnsiEscape, height: u16, start: Position) !void {
+    fn drawRecSideBorder(self: Self, writer: anytype, ansi: *const AnsiEscape, height: u16, start: Position, box_chars: BoxCars) !void {
         _ = self;
         const end_row = start.row + height - 1;
 
         var row = start.row + 1;
         while (row <= end_row) : (row += 1) {
             try ansi.cursorTo(writer, Position{ .row = row, .col = start.col });
-            try writer.writeAll(BoxChars.VERTICAL);
+            try writer.writeAll(box_chars.vertical);
         }
     }
 };
@@ -246,48 +256,49 @@ const AnsiEscape = struct {
     }
 };
 
-/// Box drawing characters
-const BoxChars = struct {
-    const TOP_LEFT = "┌";
-    const TOP_RIGHT = "┐";
-    const BOTTOM_LEFT = "└";
-    const BOTTOM_RIGHT = "┘";
-    const HORIZONTAL = "─";
-    const VERTICAL = "│";
-
-    const DOUBLE_TOP_LEFT = "┏";
-    const DOUBLE_TOP_RIGHT = "┓";
-    const DOUBLE_BOTTOM_LEFT = "┗";
-    const DOUBLE_BOTTOM_RIGHT = "┛";
-    const DOUBLE_HORIZONTAL = "━";
-    const DOUBLE_VERTICAL = "┃";
-
-    const MIDDLE_DOT = "·";
-
-    // Additional box characters for future use
-    const T_DOWN = "┬"; // ┬
-    const T_UP = "┴"; // ┴
-    const T_RIGHT = "├"; // ├
-    const T_LEFT = "┤"; // ┤
-    const CROSS = "┼";
+pub const BoxStyleType = enum {
+    light,
+    heavy,
+    double,
 };
 
-// try stdout.print("\x1b[1mMAIN TITLE\x1b[0m\n", .{});
-//     try stdout.print("═══════════\n", .{});
-//
-//     // H2 with single underline
-//     try stdout.print("\x1b[1mSection Header\x1b[0m\n", .{});
-//     try stdout.print("──────────────\n\n", .{});
-//
-//     // H3 with dots
-//     try stdout.print("\x1b[1mSubsection\x1b[0m\n", .{});
-//     try stdout.print("··········\n", .{});
-//
-//     // H4 with dashes
-//     try stdout.print("\x1b[1m- Minor Header\x1b[0m\n", .{});
-//
-//     // H5 with arrows
-//     try stdout.print("\x1b[1m→ Small Header\x1b[0m\n", .{});
-//
-//     // H6 with bullets
-//     try stdout.print("\x1b[1m• Tiny Header\x1b[0m\n", .{});
+pub const BoxCars = struct {
+    top_left: []const u8,
+    top_right: []const u8,
+    bottom_left: []const u8,
+    bottom_right: []const u8,
+    horizontal: []const u8,
+    vertical: []const u8,
+};
+
+fn getBoxSyle(style: BoxStyleType) BoxCars {
+    return switch (style) {
+        .heavy => .{
+            .top_left = "┏",
+            .top_right = "┓",
+            .bottom_left = "┗",
+            .bottom_right = "┛",
+            .horizontal = "━",
+            .vertical = "┃",
+        },
+        .double => .{
+            .top_left = "╔",
+            .top_right = "╗",
+            .bottom_left = "╚",
+            .bottom_right = "╝",
+            .horizontal = "═",
+            .vertical = "║",
+
+        },
+    else => .{
+            // light
+            .top_left = "┌",
+            .top_right = "┐",
+            .bottom_left = "└",
+            .bottom_right = "┘",
+            .horizontal = "─",
+            .vertical = "│",
+        },
+
+    };
+}

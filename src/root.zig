@@ -5,3 +5,4 @@ const std = @import("std");
 const testing = std.testing;
 const builtin = @import("builtin");
 pub const Terminal = @import("tui/window.zig").Terminal;
+pub const BoxStyleType = @import("tui/window.zig").BoxStyleType;
